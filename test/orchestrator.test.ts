@@ -79,6 +79,62 @@ test("runFromConfig retries until the auditor marks the run complete", async () 
   await rm(workspace, { recursive: true, force: true });
 });
 
+test("runFromConfig can complete with the heuristic auditor on an unchanged clean repo", async () => {
+  const workspace = await createTempRepo();
+  const configPath = path.join(workspace, "vibecodemax.config.json");
+
+  await writeFile(path.join(workspace, "deliverable.txt"), "Final deliverable\n", "utf8");
+  await writeFile(
+    configPath,
+    JSON.stringify(
+      {
+        workspace,
+        task: {
+          title: "Already complete deliverable",
+          objective: "Confirm the orchestrator can mark an already-satisfied task complete.",
+          completionCriteria: ["deliverable.txt exists and contains final text."],
+        },
+        budgets: {
+          mode: "bounded",
+          maxAttempts: 2,
+        },
+        agents: {
+          primary: {
+            command: 'node -e "console.log(\'noop\')"',
+          },
+        },
+        run: {
+          primaryAgent: "primary",
+          requiredFiles: ["deliverable.txt"],
+          verification: [
+            {
+              name: "deliverable-check",
+              command:
+                "node -e \"const fs=require('fs'); const text=fs.readFileSync('deliverable.txt','utf8'); if(!text.includes('Final deliverable')) process.exit(1);\"",
+            },
+          ],
+        },
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+  await runShellCommand("git add deliverable.txt vibecodemax.config.json", { cwd: workspace });
+  await runShellCommand('git commit -m "add deliverable config"', { cwd: workspace });
+
+  const summary = await runFromConfig(configPath, {
+    info() {},
+  });
+
+  assert.equal(summary.status, "completed");
+  assert.equal(summary.attempts, 1);
+  assert.equal(summary.records[0]?.workspaceSnapshot.changedFiles.length, 0);
+  assert.equal(summary.records[0]?.auditDecision.decision, "complete");
+
+  await rm(workspace, { recursive: true, force: true });
+});
+
 test("runFromConfig stops after bounded attempts are exhausted", async () => {
   const workspace = await createTempRepo();
   const configPath = path.join(workspace, "vibecodemax.config.json");

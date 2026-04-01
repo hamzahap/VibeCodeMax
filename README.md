@@ -16,11 +16,11 @@ It wraps a primary agent in an audit loop, runs verification commands after ever
 
 ## Current Scope
 
-This repo ships a working CLI-first release.
+The current repo-owned definition of done lives in [`docs/current-scope.md`](docs/current-scope.md).
 
-It is strongest when your agent can be launched non-interactively from a shell command. That covers tools like local CLIs directly. GUI tools and editor extensions can still participate, but only if you expose them through a wrapper script or task that can consume a prompt file and return control to the orchestrator.
+That file is the contract the self-host loop should satisfy. If you want to raise or change what "100% complete" means, update that file first, then rerun self-host against the new scope.
 
-Fully seamless GUI automation is still not solved, because true autonomous retries require a scriptable entry point.
+This repo currently ships a strong CLI-first release. It is strongest when your agent can be launched non-interactively from a shell command. GUI tools and editor extensions can still participate, but only if you expose them through a wrapper script or task that can consume a prompt file and return control to the orchestrator.
 
 ## Quick Start
 
@@ -40,6 +40,9 @@ npm run self-host:codex
 npm run self-host:claude
 node dist/src/cli.js inspect .vibecodemax/runs/<run-directory>
 ```
+
+The included self-host configs point at [`docs/current-scope.md`](docs/current-scope.md) through `task.scopeFile`, so the run is judged against an explicit scope document instead of an implicit chat goal.
+The outer self-host run is the proof run. Do not trigger `npm run self-host:*` or `node dist/src/cli.js run ...` recursively from inside the primary agent unless you are explicitly testing nested orchestration.
 
 ## How It Works
 
@@ -79,9 +82,10 @@ The output summarizes:
   "task": {
     "title": "Finish the feature",
     "objective": "Implement the full task, not a partial draft.",
+    "scopeFile": "docs/current-scope.md",
     "completionCriteria": [
-      "Tests pass.",
-      "Required files exist."
+      "Everything in docs/current-scope.md is satisfied.",
+      "Tests pass."
     ],
     "contextFiles": ["README.md", "src/index.ts"]
   },
@@ -123,6 +127,17 @@ The output summarizes:
 
 - `mode: "bounded"`: stop when a configured limit is reached. If you omit `maxAttempts`, the default is `10`.
 - `mode: "until_complete"`: keep going until the auditor marks it complete, unless another budget like `maxUsd` or `maxRuntimeMinutes` is also set.
+
+## Updating Scope
+
+To change what "100% complete" means for a run:
+
+1. Edit the scope document referenced by `task.scopeFile`.
+2. Tighten `run.verification` or `run.requiredFiles` if the new scope needs stronger proof.
+3. Rerun the loop with `node dist/src/cli.js run <config>` or one of the included self-host scripts.
+4. Inspect the finished run with `node dist/src/cli.js inspect latest`.
+
+For this repository, the default scope file is [`docs/current-scope.md`](docs/current-scope.md).
 
 ## Integrating Your Agent
 
@@ -209,6 +224,11 @@ They target this repository, run `npm test` as verification, and keep an externa
 
 A run is only marked complete when the auditor returns `complete`. Other stop conditions such as budgets or `maxNoChangeAttempts` end the run as incomplete.
 
+The included self-host configs use `mode: "until_complete"` with a runtime cap, so they will keep retrying until the auditor can justify completion or a safety limit is reached.
+They are intended to be launched once from outside the loop; the resulting outer run is the artifact you inspect as proof of completion.
+
+When you use the built-in heuristic auditor instead of an external auditor, VibeCodeMax can still mark a clean no-op run complete if required files exist and verification already passes. It does not force artificial workspace churn just to satisfy the loop.
+
 ### Native Self-Host Examples
 
 Codex primary + Codex auditor:
@@ -232,7 +252,7 @@ Codex primary + Codex auditor:
           "summary": { "type": "string" },
           "nextPrompt": { "type": "string" }
         },
-        "required": ["decision", "summary"]
+        "required": ["decision", "summary", "nextPrompt"]
       }
     }
   },
@@ -272,7 +292,7 @@ Claude primary + Claude auditor:
           "summary": { "type": "string" },
           "nextPrompt": { "type": "string" }
         },
-        "required": ["decision", "summary"]
+        "required": ["decision", "summary", "nextPrompt"]
       }
     }
   },
@@ -316,6 +336,7 @@ Or:
 - `examples/basic.config.json`: self-contained demo config.
 - `examples/fake-agent.mjs`: fake primary agent used by the demo.
 - `examples/fake-auditor.mjs`: fake auditor used by the demo.
+- `docs/current-scope.md`: repo-owned definition of done for the included self-host runs.
 - `vibecodemax.self-host.codex.json`: self-host config for Codex CLI.
 - `vibecodemax.self-host.claude.json`: self-host config for Claude Code CLI.
 - `examples/wrappers/run-primary-agent-template.ps1`: Windows wrapper template for a real primary agent.

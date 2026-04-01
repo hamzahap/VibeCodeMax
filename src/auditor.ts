@@ -42,6 +42,7 @@ function createRequiredFileReport(
 export async function buildAuditPacket(input: {
   config: NormalizedConfig;
   attempt: number;
+  taskScope?: AuditPacket["taskScope"];
   previousFeedback?: string;
   primaryResult: AuditPacket["primaryResult"];
   verificationResults: VerificationResult[];
@@ -59,6 +60,7 @@ export async function buildAuditPacket(input: {
   return {
     attempt: input.attempt,
     task: input.config.task,
+    taskScope: input.taskScope,
     previousFeedback: input.previousFeedback,
     primaryResult: input.primaryResult,
     verificationResults: input.verificationResults,
@@ -82,6 +84,8 @@ export async function runHeuristicAudit(
 ): Promise<AuditDecision> {
   const reasons: string[] = [];
   const verificationFailures = buildVerificationFailureSummary(packet.verificationResults);
+  const noWorkspaceChanges =
+    packet.workspaceSnapshot.isGitRepo && packet.workspaceSnapshot.changedFiles.length === 0;
   reasons.push(...verificationFailures);
 
   if (packet.primaryResult.exitCode !== 0) {
@@ -91,10 +95,6 @@ export async function runHeuristicAudit(
   const missingFiles = packet.requiredFiles.filter((file) => !file.exists);
   if (missingFiles.length > 0) {
     reasons.push(`Missing required files: ${missingFiles.map((file) => file.path).join(", ")}.`);
-  }
-
-  if (packet.workspaceSnapshot.isGitRepo && packet.workspaceSnapshot.changedFiles.length === 0) {
-    reasons.push("No workspace changes detected.");
   }
 
   if (reasons.length === 0) {
@@ -115,7 +115,7 @@ export async function runHeuristicAudit(
       missingFiles.length > 0
         ? `Create or update the required files: ${missingFiles.map((file) => file.path).join(", ")}.`
         : "",
-      packet.workspaceSnapshot.changedFiles.length === 0 ? "Make concrete workspace changes." : "",
+      noWorkspaceChanges ? "If the task is not already satisfied, make concrete workspace changes." : "",
     ]
       .filter(Boolean)
       .join(" "),

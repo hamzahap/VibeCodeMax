@@ -210,6 +210,13 @@ export async function loadConfig(configPathInput: string): Promise<NormalizedCon
     );
   }
 
+  if (raw.task.scopeFile !== undefined) {
+    assertCondition(
+      typeof raw.task.scopeFile === "string" && raw.task.scopeFile.trim(),
+      "task.scopeFile must be a non-empty string.",
+    );
+  }
+
   const verification = (raw.run.verification ?? []).map((command, index) =>
     normalizeVerificationCommand(workspace, command, index),
   );
@@ -240,6 +247,7 @@ export async function loadConfig(configPathInput: string): Promise<NormalizedCon
       objective: raw.task.objective.trim(),
       completionCriteria: raw.task.completionCriteria ?? [],
       contextFiles: raw.task.contextFiles ?? [],
+      scopeFile: raw.task.scopeFile?.trim() || undefined,
     },
     budgets,
     agents,

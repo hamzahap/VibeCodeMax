@@ -7,6 +7,7 @@ import { collectWorkspaceSnapshot } from "./git.js";
 import {
   buildPrimaryPrompt,
   loadContextSnippets,
+  loadScopeSnippet,
   renderTemplate,
   type TemplateVariables,
 } from "./prompts.js";
@@ -184,6 +185,7 @@ export async function runFromConfig(configPath: string, logger: Logger): Promise
   await ensureDirectory(runDirectory);
   await writeJson(path.join(runDirectory, "normalized-config.json"), config);
 
+  const scopeSnippet = await loadScopeSnippet(config);
   const contextSnippets = await loadContextSnippets(config);
 
   const budgetState: BudgetState = {
@@ -243,6 +245,7 @@ export async function runFromConfig(configPath: string, logger: Logger): Promise
       attempt,
       previousFeedback,
       previousVerificationResults,
+      scopeSnippet,
       contextSnippets,
     });
 
@@ -306,6 +309,7 @@ export async function runFromConfig(configPath: string, logger: Logger): Promise
       primaryResult,
       verificationResults,
       workspaceSnapshot,
+      taskScope: scopeSnippet,
       attemptsUsed: budgetState.attempts,
       elapsedMinutes: (Date.now() - startedAtMs) / 60_000,
       estimatedUsd: budgetState.totalEstimatedUsd,

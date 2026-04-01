@@ -11,6 +11,18 @@ test("self-host configs load with native Codex and Claude adapters", async () =>
   const codexConfig = await loadConfig(path.join(repoRoot, "vibecodemax.self-host.codex.json"));
   assert.equal(codexConfig.agents.primary!.type, "codex_exec");
   assert.equal(codexConfig.agents.auditor!.type, "codex_exec");
+  assert.equal(codexConfig.task.scopeFile, "docs/current-scope.md");
+  assert.match(codexConfig.task.objective, /do not start nested `npm run self-host:\*`/i);
+  assert.ok(
+    codexConfig.task.completionCriteria.includes(
+      "The final state is verifiable through this completed self-host run.",
+    ),
+  );
+  assert.deepEqual(codexConfig.agents.auditor?.jsonSchema?.required, [
+    "decision",
+    "summary",
+    "nextPrompt",
+  ]);
   assert.ok(
     codexConfig.run.verification.some((command) => command.command === "cmd /c npm test"),
   );
@@ -18,9 +30,55 @@ test("self-host configs load with native Codex and Claude adapters", async () =>
   const claudeConfig = await loadConfig(path.join(repoRoot, "vibecodemax.self-host.claude.json"));
   assert.equal(claudeConfig.agents.primary!.type, "claude_print");
   assert.equal(claudeConfig.agents.auditor!.type, "claude_print");
+  assert.equal(claudeConfig.task.scopeFile, "docs/current-scope.md");
+  assert.match(claudeConfig.task.objective, /do not start nested `npm run self-host:\*`/i);
+  assert.ok(
+    claudeConfig.task.completionCriteria.includes(
+      "The final state is verifiable through this completed self-host run.",
+    ),
+  );
+  assert.deepEqual(claudeConfig.agents.auditor?.jsonSchema?.required, [
+    "decision",
+    "summary",
+    "nextPrompt",
+  ]);
   assert.ok(
     claudeConfig.run.verification.some((command) => command.command === "cmd /c npm test"),
   );
+});
+
+test("loadConfig rejects blank task.scopeFile", async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "vcm-config-"));
+  const configPath = path.join(workspace, "vibecodemax.config.json");
+
+  await writeFile(
+    configPath,
+    JSON.stringify(
+      {
+        workspace,
+        task: {
+          title: "Invalid scope",
+          objective: "Validate task.scopeFile.",
+          scopeFile: "   ",
+        },
+        agents: {
+          primary: {
+            command: "echo hi",
+          },
+        },
+        run: {
+          primaryAgent: "primary",
+        },
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
+  await assert.rejects(loadConfig(configPath), /task.scopeFile must be a non-empty string/);
+
+  await rm(workspace, { recursive: true, force: true });
 });
 
 test("loadConfig rejects unsupported codex_exec approvalPolicy and search fields", async () => {

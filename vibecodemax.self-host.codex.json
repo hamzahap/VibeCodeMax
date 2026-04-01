@@ -2,14 +2,12 @@
   "workspace": ".",
   "task": {
     "title": "Self-host VibeCodeMax with Codex",
-    "objective": "Audit and improve the VibeCodeMax repository until it is a strong self-hosting release for autonomous coding-agent execution. If the repo already satisfies the completion criteria, avoid unnecessary churn and leave the workspace passing verification.",
+    "objective": "Audit and improve the VibeCodeMax repository until it is a strong self-hosting release for autonomous coding-agent execution. Treat the current outer VibeCodeMax run as the proof self-host run, and do not start nested `npm run self-host:*` or `node dist/src/cli.js run ...` loops from inside the agent. If the repo already satisfies the completion criteria, avoid unnecessary churn and leave the workspace passing verification.",
+    "scopeFile": "docs/current-scope.md",
     "completionCriteria": [
+      "Everything in docs/current-scope.md is satisfied.",
       "npm test passes.",
-      "README documents native Codex and Claude adapter usage.",
-      "README documents how to inspect completed runs.",
-      "Self-host configs exist for Codex and Claude.",
-      "The CLI can summarize a completed run via vibecodemax inspect.",
-      "The run ends only when the auditor can justify completion."
+      "The final state is verifiable through this completed self-host run."
     ],
     "contextFiles": [
       "README.md",
@@ -23,8 +21,7 @@
     ]
   },
   "budgets": {
-    "mode": "bounded",
-    "maxAttempts": 2,
+    "mode": "until_complete",
     "maxRuntimeMinutes": 25
   },
   "agents": {
@@ -62,6 +59,7 @@
     "primaryAgent": "primary",
     "auditorAgent": "auditor",
     "requiredFiles": [
+      "docs/current-scope.md",
       "README.md",
       "src/agents.ts",
       "vibecodemax.self-host.codex.json",

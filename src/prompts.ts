@@ -29,27 +29,44 @@ export function renderTemplate(template: string, variables: Record<string, strin
   });
 }
 
+async function readSnippetFile(
+  workspace: string,
+  relativeFile: string,
+): Promise<ContextSnippet> {
+  const absoluteFile = path.resolve(workspace, relativeFile);
+
+  try {
+    const contents = await readFile(absoluteFile, "utf8");
+    const truncated = contents.length > CONTEXT_SNIPPET_LIMIT;
+    return {
+      path: relativeFile,
+      content: truncated ? `${contents.slice(0, CONTEXT_SNIPPET_LIMIT)}\n...[truncated]` : contents,
+      truncated,
+    };
+  } catch (error) {
+    return {
+      path: relativeFile,
+      content: `Unable to read file: ${(error as Error).message}`,
+      truncated: false,
+    };
+  }
+}
+
+export async function loadScopeSnippet(
+  config: NormalizedConfig,
+): Promise<ContextSnippet | undefined> {
+  if (!config.task.scopeFile) {
+    return undefined;
+  }
+
+  return readSnippetFile(config.workspace, config.task.scopeFile);
+}
+
 export async function loadContextSnippets(config: NormalizedConfig): Promise<ContextSnippet[]> {
   const snippets: ContextSnippet[] = [];
 
   for (const relativeFile of config.task.contextFiles) {
-    const absoluteFile = path.resolve(config.workspace, relativeFile);
-
-    try {
-      const contents = await readFile(absoluteFile, "utf8");
-      const truncated = contents.length > CONTEXT_SNIPPET_LIMIT;
-      snippets.push({
-        path: relativeFile,
-        content: truncated ? `${contents.slice(0, CONTEXT_SNIPPET_LIMIT)}\n...[truncated]` : contents,
-        truncated,
-      });
-    } catch (error) {
-      snippets.push({
-        path: relativeFile,
-        content: `Unable to read file: ${(error as Error).message}`,
-        truncated: false,
-      });
-    }
+    snippets.push(await readSnippetFile(config.workspace, relativeFile));
   }
 
   return snippets;
@@ -91,14 +108,30 @@ function renderContextSnippets(snippets: ContextSnippet[]): string {
     .join("\n\n");
 }
 
+function renderScopeSnippet(snippet?: ContextSnippet): string {
+  if (!snippet) {
+    return "No explicit scope file was configured.";
+  }
+
+  return `## ${snippet.path}\n\`\`\`text\n${snippet.content.trimEnd()}\n\`\`\`${snippet.truncated ? "\n[snippet truncated]" : ""}`;
+}
+
 export function buildPrimaryPrompt(input: {
   config: NormalizedConfig;
   attempt: number;
   previousFeedback?: string;
   previousVerificationResults?: VerificationResult[];
+  scopeSnippet?: ContextSnippet;
   contextSnippets: ContextSnippet[];
 }): string {
-  const { config, attempt, previousFeedback, previousVerificationResults, contextSnippets } = input;
+  const {
+    config,
+    attempt,
+    previousFeedback,
+    previousVerificationResults,
+    scopeSnippet,
+    contextSnippets,
+  } = input;
 
   return [
     `# ${config.task.title}`,
@@ -110,6 +143,9 @@ export function buildPrimaryPrompt(input: {
     "",
     "## Completion Criteria",
     renderCompletionCriteria(config.task.completionCriteria),
+    "",
+    "## Scope / Definition of Done",
+    renderScopeSnippet(scopeSnippet),
     "",
     "## Previous Auditor Feedback",
     previousFeedback?.trim() || "- No prior feedback. Deliver the complete result.",
@@ -124,6 +160,8 @@ export function buildPrimaryPrompt(input: {
     "- Make the task actually complete, not partially complete.",
     "- Modify files directly in the workspace.",
     "- Leave the workspace in a verifiable state.",
+    "- Do not launch nested VibeCodeMax/self-host loops from inside this run unless the task explicitly requires nested-loop testing.",
+    "- If the task needs proof of a completed run, use this run's artifacts instead of spawning another orchestrator instance.",
     "- Prefer decisive changes over incremental stalling.",
   ].join("\n");
 }
@@ -143,6 +181,8 @@ export function buildAuditPrompt(input: {
     "",
     "Return JSON only with this shape:",
     '{"decision":"complete|continue","summary":"short rationale","nextPrompt":"specific next instruction when continuing"}',
+    "",
+    "Read the audit packet file before deciding. When present, taskScope in the packet is the repo-defined definition of done.",
     "",
     "If you choose complete, set nextPrompt to an empty string.",
     "",
