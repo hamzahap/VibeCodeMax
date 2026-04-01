@@ -144,6 +144,8 @@ export function buildAuditPrompt(input: {
     "Return JSON only with this shape:",
     '{"decision":"complete|continue","summary":"short rationale","nextPrompt":"specific next instruction when continuing"}',
     "",
+    "If you choose complete, set nextPrompt to an empty string.",
+    "",
     "Mark complete only if the task is genuinely done. Prefer continue over false positives.",
   ].join("\n");
 }

@@ -1,5 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
+import { runConfiguredAgent } from "./agents.js";
 import { buildAuditPacket, runExternalAuditor, runHeuristicAudit } from "./auditor.js";
 import { loadConfig } from "./config.js";
 import { collectWorkspaceSnapshot } from "./git.js";
@@ -69,42 +70,6 @@ function buildTemplateVariables(input: {
 function applyAgentCost(profile: NormalizedAgentProfile, state: BudgetState): void {
   state.totalEstimatedUsd += profile.estimatedCostUsdPerRun ?? 0;
   state.totalEstimatedTokens += profile.estimatedTokensPerRun ?? 0;
-}
-
-async function runAgent(input: {
-  agent: NormalizedAgentProfile;
-  variables: TemplateVariables;
-  role: "primary" | "auditor";
-}) {
-  const renderedVariables: TemplateVariables = {
-    ...input.variables,
-    ROLE: input.role,
-    MODEL: input.agent.model ?? input.variables.MODEL ?? "",
-  };
-
-  const env = Object.fromEntries(
-    Object.entries(input.agent.env ?? {}).map(([key, value]) => [
-      key,
-      renderTemplate(value, renderedVariables),
-    ]),
-  );
-
-  return runShellCommand(renderTemplate(input.agent.command, renderedVariables), {
-    cwd: input.agent.cwd,
-    env: {
-      ...env,
-      VCM_ATTEMPT: renderedVariables.ATTEMPT,
-      VCM_ROLE: input.role,
-      VCM_WORKSPACE: renderedVariables.WORKSPACE,
-      VCM_RUN_DIR: renderedVariables.RUN_DIR,
-      VCM_PROMPT_FILE: renderedVariables.PROMPT_FILE,
-      VCM_AUDIT_PACKET_FILE: renderedVariables.AUDIT_PACKET_FILE,
-      VCM_MODEL: renderedVariables.MODEL,
-      VCM_TASK_TITLE: renderedVariables.TASK_TITLE,
-      VCM_OBJECTIVE: renderedVariables.OBJECTIVE,
-      VCM_CONFIG_FILE: renderedVariables.CONFIG_FILE,
-    },
-  });
 }
 
 async function runVerification(input: {
@@ -230,21 +195,18 @@ export async function runFromConfig(configPath: string, logger: Logger): Promise
   const records: AttemptRecord[] = [];
   let previousFeedback: string | undefined;
   let previousVerificationResults: VerificationResult[] = [];
-  let lastDiffHash = "";
+  let lastDiffHash: string | undefined;
   let noChangeStreak = 0;
 
   logger.info(`Workspace: ${config.workspace}`);
   logger.info(`Artifacts: ${runDirectory}`);
 
   while (true) {
-    const preAttemptStopReason =
-      config.budgets.mode === "bounded"
-        ? evaluateBudgetStop({
-            state: budgetState,
-            startedAtMs,
-            budgets: config.budgets,
-          })
-        : undefined;
+    const preAttemptStopReason = evaluateBudgetStop({
+      state: budgetState,
+      startedAtMs,
+      budgets: config.budgets,
+    });
 
     if (preAttemptStopReason) {
       const finishedAt = new Date();
@@ -299,7 +261,7 @@ export async function runFromConfig(configPath: string, logger: Logger): Promise
       configFile: config.configPath,
     });
 
-    const primaryResult = await runAgent({
+    const primaryResult = await runConfiguredAgent({
       agent: primaryAgent,
       variables: primaryVariables,
       role: "primary",
@@ -325,11 +287,16 @@ export async function runFromConfig(configPath: string, logger: Logger): Promise
     await writeJson(path.join(attemptDirectory, "workspace-snapshot.json"), workspaceSnapshot);
     logger.info(`Workspace snapshot: ${workspaceSnapshot.summary}`);
 
-    if (workspaceSnapshot.diffHash === lastDiffHash) {
-      noChangeStreak += 1;
+    if (workspaceSnapshot.isGitRepo) {
+      if (workspaceSnapshot.diffHash === lastDiffHash) {
+        noChangeStreak += 1;
+      } else {
+        noChangeStreak = 0;
+        lastDiffHash = workspaceSnapshot.diffHash;
+      }
     } else {
       noChangeStreak = 0;
-      lastDiffHash = workspaceSnapshot.diffHash;
+      lastDiffHash = undefined;
     }
 
     const auditPacket = await buildAuditPacket({
@@ -406,7 +373,7 @@ export async function runFromConfig(configPath: string, logger: Logger): Promise
       const finishedAt = new Date();
       const summary: RunSummary = {
         status: "stopped",
-        reason: `No meaningful diff change across ${config.run.maxNoChangeAttempts} consecutive attempts.`,
+        reason: `No meaningful diff change across ${config.run.maxNoChangeAttempts} consecutive retry attempts.`,
         startedAt: startedAt.toISOString(),
         finishedAt: finishedAt.toISOString(),
         attempts: budgetState.attempts,

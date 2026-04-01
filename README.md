@@ -4,9 +4,10 @@ VibeCodeMax is a local orchestrator for coding agents that stop too early.
 
 It wraps a primary agent in an audit loop, runs verification commands after every attempt, and keeps reprompting until the task is actually done or a budget limit is hit. The goal is simple: stop waking up to a half-finished result.
 
-## What This MVP Does
+## What It Does
 
 - Runs any scriptable coding agent through a config file.
+- Ships native adapters for `codex exec` and `claude -p`.
 - Supports a separate auditor agent or a built-in heuristic auditor.
 - Re-prompts automatically using the last failed audit.
 - Enforces budgets by attempts, runtime, estimated USD, or estimated tokens.
@@ -15,11 +16,11 @@ It wraps a primary agent in an audit loop, runs verification commands after ever
 
 ## Current Scope
 
-This repo ships the first working CLI MVP.
+This repo ships a working CLI-first release.
 
 It is strongest when your agent can be launched non-interactively from a shell command. That covers tools like local CLIs directly. GUI tools and editor extensions can still participate, but only if you expose them through a wrapper script or task that can consume a prompt file and return control to the orchestrator.
 
-Fully seamless GUI automation is not solved in this first version, because true autonomous retries require a scriptable entry point.
+Fully seamless GUI automation is still not solved, because true autonomous retries require a scriptable entry point.
 
 ## Quick Start
 
@@ -31,11 +32,18 @@ node dist/src/cli.js run examples/basic.config.json
 
 The demo config uses a fake primary agent and a fake auditor so you can verify the loop end-to-end before wiring in a real model.
 
+For native self-hosting on this repo:
+
+```bash
+npm run self-host:codex
+npm run self-host:claude
+```
+
 ## How It Works
 
 1. VibeCodeMax loads a JSON config.
 2. It writes a primary prompt file for the current attempt.
-3. It runs your configured primary agent command.
+3. It runs your configured primary agent.
 4. It runs verification commands against the workspace.
 5. It snapshots git-visible workspace changes.
 6. It asks the configured auditor whether the task is complete.
@@ -63,12 +71,15 @@ The demo config uses a fake primary agent and a fake auditor so you can verify t
   },
   "agents": {
     "primary": {
+      "type": "codex_exec",
       "model": "your-model-name",
-      "command": "your-primary-agent-command"
+      "dangerouslyBypassApprovalsAndSandbox": true
     },
     "auditor": {
+      "type": "claude_print",
       "model": "your-auditor-model",
-      "command": "your-auditor-command"
+      "permissionMode": "auto",
+      "outputFormat": "json"
     }
   },
   "run": {
@@ -93,7 +104,52 @@ The demo config uses a fake primary agent and a fake auditor so you can verify t
 
 ## Integrating Your Agent
 
-Each agent profile is just a shell command plus optional metadata.
+Each agent profile can be either:
+
+- `type: "command"` with a raw shell `command`.
+- `type: "codex_exec"` for native Codex CLI execution.
+- `type: "claude_print"` for native Claude Code CLI execution.
+
+If `type` is omitted, VibeCodeMax treats the agent as `command`.
+
+### Native Adapters
+
+`codex_exec` uses `codex exec` under the hood and sends the prompt through stdin. It supports fields such as:
+
+- `model`
+- `sandbox`
+- `fullAuto`
+- `dangerouslyBypassApprovalsAndSandbox`
+- `skipGitRepoCheck`
+- `profile`
+- `color`
+- `additionalWritableDirs`
+- `jsonSchema`
+- `extraArgs`
+
+Notes for Codex:
+
+- `approvalPolicy` is not exposed by the current `codex exec` CLI. Use `fullAuto`, `sandbox`, or `dangerouslyBypassApprovalsAndSandbox` instead.
+- `search` is not currently supported by `codex exec`.
+- When `jsonSchema` is provided for Codex, VibeCodeMax normalizes it to the stricter response-schema format expected by the current `codex exec` CLI.
+
+`claude_print` uses `claude -p` under the hood. It supports fields such as:
+
+- `model`
+- `permissionMode`
+- `dangerouslySkipPermissions`
+- `noSessionPersistence`
+- `maxBudgetUsd`
+- `systemPrompt`
+- `appendSystemPrompt`
+- `allowedTools`
+- `disallowedTools`
+- `jsonSchema`
+- `extraArgs`
+
+### Custom Commands
+
+For `type: "command"`, VibeCodeMax renders your shell command and environment variables before launch.
 
 Two ways to pass context into your tool:
 
@@ -120,11 +176,101 @@ Two ways to pass context into your tool:
 
 Wrapper templates are included under `examples/wrappers/`.
 
+## Self-Hosting
+
+Two self-host configs are included at the repo root:
+
+- `vibecodemax.self-host.codex.json`
+- `vibecodemax.self-host.claude.json`
+
+They target this repository, run `npm test` as verification, and keep an external auditor in the loop for completion decisions.
+
+A run is only marked complete when the auditor returns `complete`. Other stop conditions such as budgets or `maxNoChangeAttempts` end the run as incomplete.
+
+### Native Self-Host Examples
+
+Codex primary + Codex auditor:
+
+```json
+{
+  "agents": {
+    "primary": {
+      "type": "codex_exec",
+      "model": "gpt-5.4",
+      "dangerouslyBypassApprovalsAndSandbox": true
+    },
+    "auditor": {
+      "type": "codex_exec",
+      "model": "gpt-5.4-mini",
+      "dangerouslyBypassApprovalsAndSandbox": true,
+      "jsonSchema": {
+        "type": "object",
+        "properties": {
+          "decision": { "type": "string", "enum": ["complete", "continue"] },
+          "summary": { "type": "string" },
+          "nextPrompt": { "type": "string" }
+        },
+        "required": ["decision", "summary"]
+      }
+    }
+  },
+  "run": {
+    "primaryAgent": "primary",
+    "auditorAgent": "auditor",
+    "verification": [
+      { "name": "tests", "command": "cmd /c npm test" }
+    ]
+  }
+}
+```
+
+Claude primary + Claude auditor:
+
+```json
+{
+  "agents": {
+    "primary": {
+      "type": "claude_print",
+      "model": "sonnet",
+      "permissionMode": "auto",
+      "dangerouslySkipPermissions": true,
+      "noSessionPersistence": true
+    },
+    "auditor": {
+      "type": "claude_print",
+      "model": "sonnet",
+      "permissionMode": "auto",
+      "dangerouslySkipPermissions": true,
+      "noSessionPersistence": true,
+      "outputFormat": "json",
+      "jsonSchema": {
+        "type": "object",
+        "properties": {
+          "decision": { "type": "string", "enum": ["complete", "continue"] },
+          "summary": { "type": "string" },
+          "nextPrompt": { "type": "string" }
+        },
+        "required": ["decision", "summary"]
+      }
+    }
+  },
+  "run": {
+    "primaryAgent": "primary",
+    "auditorAgent": "auditor",
+    "verification": [
+      { "name": "tests", "command": "cmd /c npm test" }
+    ]
+  }
+}
+```
+
 ## Claude Code / Codex / VS Code / GUI Notes
 
+- Codex CLI works natively through `type: "codex_exec"`.
+- Claude Code works natively through `type: "claude_print"`.
 - If your tool already has a non-interactive CLI, point `command` at it directly.
 - If your tool is GUI-first, create a local wrapper that reads `VCM_PROMPT_FILE`, launches the tool against `VCM_WORKSPACE`, waits for completion, and then exits.
-- The auditor command must return JSON on stdout:
+- Native auditors should return JSON matching the required shape. For custom command auditors, stdout must be:
 
 ```json
 {
@@ -148,6 +294,8 @@ Or:
 - `examples/basic.config.json`: self-contained demo config.
 - `examples/fake-agent.mjs`: fake primary agent used by the demo.
 - `examples/fake-auditor.mjs`: fake auditor used by the demo.
+- `vibecodemax.self-host.codex.json`: self-host config for Codex CLI.
+- `vibecodemax.self-host.claude.json`: self-host config for Claude Code CLI.
 - `examples/wrappers/run-primary-agent-template.ps1`: Windows wrapper template for a real primary agent.
 - `examples/wrappers/run-auditor-template.ps1`: Windows wrapper template for a real auditor.
 
@@ -162,7 +310,6 @@ npm test
 ## Roadmap
 
 - Interactive local dashboard for live runs.
-- First-class provider presets instead of wrapper-only integration.
 - Better diff scoring and completion detection.
 - Session resume and pause controls.
 - Per-agent spend tracking from real API usage instead of estimates.

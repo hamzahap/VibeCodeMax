@@ -133,3 +133,103 @@ test("runFromConfig stops after bounded attempts are exhausted", async () => {
 
   await rm(workspace, { recursive: true, force: true });
 });
+
+test("runFromConfig does not trigger the no-change guard outside git repositories", async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "vcm-no-git-"));
+  const configPath = path.join(workspace, "vibecodemax.config.json");
+
+  await writeFile(
+    configPath,
+    JSON.stringify(
+      {
+        workspace,
+        task: {
+          title: "Non-git workspace",
+          objective: "Keep trying until the bounded budget is exhausted.",
+        },
+        budgets: {
+          mode: "bounded",
+          maxAttempts: 2,
+        },
+        agents: {
+          primary: {
+            command:
+              'node -e "const fs=require(\'fs\'); fs.writeFileSync(\'attempt.txt\', \'still trying\\n\');"',
+          },
+        },
+        run: {
+          primaryAgent: "primary",
+          requiredFiles: ["missing.txt"],
+          maxNoChangeAttempts: 1,
+        },
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
+  const summary = await runFromConfig(configPath, {
+    info() {},
+  });
+
+  assert.equal(summary.status, "budget_exhausted");
+  assert.equal(summary.attempts, 2);
+
+  await rm(workspace, { recursive: true, force: true });
+});
+
+test("runFromConfig honors explicit budgets in until_complete mode", async () => {
+  const workspace = await createTempRepo();
+  const configPath = path.join(workspace, "vibecodemax.config.json");
+
+  await writeFile(
+    path.join(workspace, "stuck-agent.mjs"),
+    [
+      'import fs from "node:fs/promises";',
+      'import path from "node:path";',
+      'const workspace = process.env.VCM_WORKSPACE;',
+      'await fs.writeFile(path.join(workspace, "attempt.txt"), "still stuck\\n", "utf8");',
+      'console.log("stuck");',
+    ].join("\n"),
+    "utf8",
+  );
+
+  await writeFile(
+    configPath,
+    JSON.stringify(
+      {
+        workspace,
+        task: {
+          title: "Until complete with cap",
+          objective: "This should stop when the explicit attempt budget is reached.",
+        },
+        budgets: {
+          mode: "until_complete",
+          maxAttempts: 2,
+        },
+        agents: {
+          primary: {
+            command: "node ./stuck-agent.mjs",
+          },
+        },
+        run: {
+          primaryAgent: "primary",
+          requiredFiles: ["never.txt"],
+        },
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
+  const summary = await runFromConfig(configPath, {
+    info() {},
+  });
+
+  assert.equal(summary.status, "budget_exhausted");
+  assert.equal(summary.attempts, 2);
+
+  await rm(workspace, { recursive: true, force: true });
+});

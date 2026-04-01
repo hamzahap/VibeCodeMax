@@ -1,7 +1,8 @@
 import { access, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { buildAuditPrompt, renderTemplate, type TemplateVariables } from "./prompts.js";
-import { ensureDirectory, runShellCommand, writeJson } from "./process.js";
+import { runConfiguredAgent } from "./agents.js";
+import { buildAuditPrompt, type TemplateVariables } from "./prompts.js";
+import { ensureDirectory, writeJson } from "./process.js";
 import type {
   AuditDecision,
   AuditPacket,
@@ -135,7 +136,7 @@ function parseAuditJson(rawOutput: string): AuditDecision {
   return {
     decision,
     summary,
-    nextPrompt: typeof nextPrompt === "string" ? nextPrompt : undefined,
+    nextPrompt: typeof nextPrompt === "string" && nextPrompt.trim() ? nextPrompt : undefined,
     rawOutput,
     source: "external",
   };
@@ -173,28 +174,10 @@ export async function runExternalAuditor(input: {
     MODEL: agent.model ?? "",
   };
 
-  const env = Object.fromEntries(
-    Object.entries(agent.env ?? {}).map(([key, value]) => [
-      key,
-      renderTemplate(value, renderedVariables),
-    ]),
-  );
-
-  const result = await runShellCommand(renderTemplate(agent.command, renderedVariables), {
-    cwd: agent.cwd,
-    env: {
-      ...env,
-      VCM_ATTEMPT: renderedVariables.ATTEMPT,
-      VCM_ROLE: "auditor",
-      VCM_WORKSPACE: renderedVariables.WORKSPACE,
-      VCM_RUN_DIR: renderedVariables.RUN_DIR,
-      VCM_PROMPT_FILE: auditPromptFile,
-      VCM_AUDIT_PACKET_FILE: auditPacketFile,
-      VCM_MODEL: renderedVariables.MODEL,
-      VCM_TASK_TITLE: renderedVariables.TASK_TITLE,
-      VCM_OBJECTIVE: renderedVariables.OBJECTIVE,
-      VCM_CONFIG_FILE: renderedVariables.CONFIG_FILE,
-    },
+  const result = await runConfiguredAgent({
+    agent,
+    variables: renderedVariables,
+    role: "auditor",
   });
 
   await writeJson(path.join(attemptDirectory, "audit-command-result.json"), result);

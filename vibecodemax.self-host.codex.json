@@ -1,0 +1,74 @@
+{
+  "workspace": ".",
+  "task": {
+    "title": "Self-host VibeCodeMax with Codex",
+    "objective": "Audit and improve the VibeCodeMax repository until it is a strong first release for autonomous coding-agent execution. If the repo already satisfies the completion criteria, avoid unnecessary churn and leave the workspace passing verification.",
+    "completionCriteria": [
+      "npm test passes.",
+      "README documents native Codex and Claude adapter usage.",
+      "Self-host configs exist for Codex and Claude.",
+      "The run ends only when the auditor can justify completion."
+    ],
+    "contextFiles": [
+      "README.md",
+      "package.json",
+      "src/agents.ts",
+      "src/orchestrator.ts",
+      "src/auditor.ts",
+      "src/config.ts"
+    ]
+  },
+  "budgets": {
+    "mode": "bounded",
+    "maxAttempts": 2,
+    "maxRuntimeMinutes": 25
+  },
+  "agents": {
+    "primary": {
+      "type": "codex_exec",
+      "model": "gpt-5.4",
+      "dangerouslyBypassApprovalsAndSandbox": true,
+      "estimatedTokensPerRun": 12000
+    },
+    "auditor": {
+      "type": "codex_exec",
+      "model": "gpt-5.4-mini",
+      "dangerouslyBypassApprovalsAndSandbox": true,
+      "estimatedTokensPerRun": 4000,
+      "jsonSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": ["complete", "continue"]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "nextPrompt": {
+            "type": "string"
+          }
+        },
+        "required": ["decision", "summary", "nextPrompt"]
+      }
+    }
+  },
+  "run": {
+    "primaryAgent": "primary",
+    "auditorAgent": "auditor",
+    "requiredFiles": [
+      "README.md",
+      "src/agents.ts",
+      "vibecodemax.self-host.codex.json",
+      "vibecodemax.self-host.claude.json"
+    ],
+    "verification": [
+      {
+        "name": "npm-test",
+        "command": "cmd /c npm test"
+      }
+    ],
+    "maxNoChangeAttempts": 2
+  }
+}

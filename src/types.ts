@@ -1,6 +1,7 @@
 export type BudgetMode = "bounded" | "until_complete";
 export type AuditDecisionType = "complete" | "continue";
 export type RunStatus = "completed" | "budget_exhausted" | "stopped";
+export type AgentType = "command" | "codex_exec" | "claude_print";
 
 export interface TaskConfig {
   title: string;
@@ -25,12 +26,33 @@ export interface BudgetConfig {
 }
 
 export interface AgentProfile {
-  command: string;
+  type?: AgentType;
+  command?: string;
   model?: string;
   cwd?: string;
   env?: Record<string, string>;
   estimatedCostUsdPerRun?: number;
   estimatedTokensPerRun?: number;
+  approvalPolicy?: string;
+  sandbox?: string;
+  permissionMode?: string;
+  outputFormat?: "text" | "json";
+  fullAuto?: boolean;
+  dangerouslyBypassApprovalsAndSandbox?: boolean;
+  dangerouslySkipPermissions?: boolean;
+  noSessionPersistence?: boolean;
+  skipGitRepoCheck?: boolean;
+  search?: boolean;
+  profile?: string;
+  color?: "always" | "never" | "auto";
+  systemPrompt?: string;
+  appendSystemPrompt?: string;
+  additionalWritableDirs?: string[];
+  allowedTools?: string[];
+  disallowedTools?: string[];
+  extraArgs?: string[];
+  maxBudgetUsd?: number;
+  jsonSchema?: Record<string, unknown>;
 }
 
 export interface VerificationCommandConfig {
@@ -66,7 +88,12 @@ export interface NormalizedBudgetConfig {
 }
 
 export interface NormalizedAgentProfile extends AgentProfile {
+  type: AgentType;
   cwd: string;
+  additionalWritableDirs: string[];
+  allowedTools: string[];
+  disallowedTools: string[];
+  extraArgs: string[];
 }
 
 export interface NormalizedVerificationCommand extends VerificationCommandConfig {
@@ -97,6 +124,18 @@ export interface CommandResult {
   stdout: string;
   stderr: string;
   durationMs: number;
+  processStdout?: string;
+  capturedStdoutFile?: string;
+}
+
+export interface CommandInvocation {
+  cwd: string;
+  env?: Record<string, string>;
+  shellCommand?: string;
+  executable?: string;
+  args?: string[];
+  stdin?: string;
+  captureStdoutFile?: string;
 }
 
 export interface VerificationResult extends CommandResult {

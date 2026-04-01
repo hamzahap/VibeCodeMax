@@ -8,15 +8,15 @@ function normalizeRelativePath(input: string): string {
 }
 
 function parseStatusLine(line: string): string {
-  const trimmed = line.trim();
+  const content = line.length >= 3 ? line.slice(3).trim() : line.trim();
   const renameMarker = " -> ";
 
-  if (trimmed.includes(renameMarker)) {
-    const pieces = trimmed.split(renameMarker);
-    return normalizeRelativePath(pieces.at(-1) ?? trimmed);
+  if (content.includes(renameMarker)) {
+    const pieces = content.split(renameMarker);
+    return normalizeRelativePath(pieces.at(-1) ?? content);
   }
 
-  return normalizeRelativePath(trimmed.slice(3));
+  return normalizeRelativePath(content);
 }
 
 function buildIgnorePrefixes(workspace: string, ignorePaths: string[]): string[] {

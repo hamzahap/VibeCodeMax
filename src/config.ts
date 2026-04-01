@@ -24,6 +24,10 @@ function isPositiveNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string" && item.trim());
+}
+
 function resolveFrom(base: string, maybeRelative?: string): string {
   if (!maybeRelative) {
     return base;
@@ -68,7 +72,15 @@ function normalizeAgentProfile(
   name: string,
   profile: AgentProfile,
 ): NormalizedAgentProfile {
-  assertCondition(profile.command && profile.command.trim(), `agents.${name}.command is required.`);
+  const type = profile.type ?? "command";
+  assertCondition(
+    type === "command" || type === "codex_exec" || type === "claude_print",
+    `agents.${name}.type must be one of command, codex_exec, claude_print.`,
+  );
+
+  if (type === "command") {
+    assertCondition(profile.command && profile.command.trim(), `agents.${name}.command is required.`);
+  }
 
   if (
     profile.estimatedCostUsdPerRun !== undefined &&
@@ -84,9 +96,48 @@ function normalizeAgentProfile(
     throw new Error(`agents.${name}.estimatedTokensPerRun must be a positive number.`);
   }
 
+  if (profile.maxBudgetUsd !== undefined && !isPositiveNumber(profile.maxBudgetUsd)) {
+    throw new Error(`agents.${name}.maxBudgetUsd must be a positive number.`);
+  }
+
+  if (profile.additionalWritableDirs !== undefined && !isStringArray(profile.additionalWritableDirs)) {
+    throw new Error(`agents.${name}.additionalWritableDirs must be an array of non-empty strings.`);
+  }
+
+  if (profile.allowedTools !== undefined && !isStringArray(profile.allowedTools)) {
+    throw new Error(`agents.${name}.allowedTools must be an array of non-empty strings.`);
+  }
+
+  if (profile.disallowedTools !== undefined && !isStringArray(profile.disallowedTools)) {
+    throw new Error(`agents.${name}.disallowedTools must be an array of non-empty strings.`);
+  }
+
+  if (profile.extraArgs !== undefined && !isStringArray(profile.extraArgs)) {
+    throw new Error(`agents.${name}.extraArgs must be an array of non-empty strings.`);
+  }
+
+  if (type === "codex_exec" && profile.approvalPolicy !== undefined) {
+    throw new Error(
+      `agents.${name}.approvalPolicy is not supported for codex_exec. Use fullAuto, sandbox, or dangerouslyBypassApprovalsAndSandbox instead.`,
+    );
+  }
+
+  if (type === "codex_exec" && profile.search !== undefined) {
+    throw new Error(
+      `agents.${name}.search is not supported for codex_exec. The current codex exec CLI does not accept --search.`,
+    );
+  }
+
   return {
     ...profile,
+    type,
     cwd: resolveFrom(workspace, profile.cwd),
+    additionalWritableDirs: (profile.additionalWritableDirs ?? []).map((entry) =>
+      resolveFrom(workspace, entry),
+    ),
+    allowedTools: profile.allowedTools ?? [],
+    disallowedTools: profile.disallowedTools ?? [],
+    extraArgs: profile.extraArgs ?? [],
   };
 }
 
