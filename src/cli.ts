@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 import path from "node:path";
 import { runFromConfig } from "./orchestrator.js";
+import { formatRunSummary, loadRunSummary, resolveRunSummaryPath } from "./runs.js";
 
 function printHelp(): void {
   console.log(`VibeCodeMax
 
 Usage:
   vibecodemax run [config-file]
+  vibecodemax inspect [latest|run-directory|run-summary.json]
 
 Examples:
   vibecodemax run
   vibecodemax run .\\examples\\basic.config.json
+  vibecodemax inspect latest
 `);
 }
 
@@ -19,6 +22,13 @@ async function main(): Promise<void> {
 
   if (command === "--help" || command === "-h" || command === "help") {
     printHelp();
+    return;
+  }
+
+  if (command === "inspect") {
+    const summaryPath = await resolveRunSummaryPath(configArg, process.cwd());
+    const summary = await loadRunSummary(summaryPath);
+    console.log(formatRunSummary(summary));
     return;
   }
 

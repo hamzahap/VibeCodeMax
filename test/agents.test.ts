@@ -113,12 +113,12 @@ test("prepareAgentInvocation builds a claude print invocation with JSON schema",
   });
 
   assert.equal(invocation.executable, "claude");
-  assert.deepEqual(invocation.args?.slice(0, 3), ["-p", "--output-format", "json"]);
+  assert.deepEqual(invocation.args?.slice(0, 5), ["-p", "--input-format", "text", "--output-format", "json"]);
   assert.ok(invocation.args?.includes("--json-schema"));
   assert.ok(invocation.args?.includes("--dangerously-skip-permissions"));
   assert.ok(invocation.args?.includes("--no-session-persistence"));
   assert.ok(invocation.args?.includes("--verbose"));
-  assert.match(invocation.args?.at(-1) ?? "", /Finish the task/);
+  assert.match(invocation.stdin ?? "", /Finish the task/);
 
   await rm(directory, { recursive: true, force: true });
 });

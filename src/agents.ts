@@ -145,7 +145,7 @@ async function buildClaudeInvocation(input: {
   const env = buildRuntimeEnv(variables, role, renderEnv(agent, variables));
   const promptText = await readFile(variables.PROMPT_FILE, "utf8");
   const outputFormat = agent.outputFormat ?? (agent.jsonSchema ? "json" : role === "auditor" ? "json" : "text");
-  const args = ["-p", "--output-format", outputFormat];
+  const args = ["-p", "--input-format", "text", "--output-format", outputFormat];
 
   if (agent.model) {
     args.push("--model", renderTemplate(agent.model, variables));
@@ -192,13 +192,13 @@ async function buildClaudeInvocation(input: {
   }
 
   args.push(...renderArray(agent.extraArgs, variables));
-  args.push(promptText);
 
   return {
     cwd: agent.cwd,
     env,
     executable: "claude",
     args,
+    stdin: promptText,
   };
 }
 

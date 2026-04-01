@@ -28,6 +28,7 @@ Fully seamless GUI automation is still not solved, because true autonomous retri
 npm install
 npm run build
 node dist/src/cli.js run examples/basic.config.json
+node dist/src/cli.js inspect latest
 ```
 
 The demo config uses a fake primary agent and a fake auditor so you can verify the loop end-to-end before wiring in a real model.
@@ -37,6 +38,7 @@ For native self-hosting on this repo:
 ```bash
 npm run self-host:codex
 npm run self-host:claude
+node dist/src/cli.js inspect .vibecodemax/runs/<run-directory>
 ```
 
 ## How It Works
@@ -48,6 +50,26 @@ npm run self-host:claude
 5. It snapshots git-visible workspace changes.
 6. It asks the configured auditor whether the task is complete.
 7. If the answer is `continue`, it builds the next prompt from the audit feedback and repeats.
+8. You can inspect the final run timeline with `vibecodemax inspect`.
+
+## Inspecting Runs
+
+Use the CLI to inspect the latest completed run or a specific completed run directory:
+
+```bash
+node dist/src/cli.js inspect latest
+node dist/src/cli.js inspect .vibecodemax/runs/2026-04-01T15-24-00-640Z-self-host-vibecodemax-with-codex
+```
+
+`inspect latest` skips newer in-progress run directories and resolves to the newest run that already has a `run-summary.json`.
+
+The output summarizes:
+
+- overall status, reason, attempts, duration, and estimated usage
+- each attempt's primary-agent exit code and duration
+- verification pass/fail counts
+- workspace change summary
+- auditor decision for each attempt
 
 ## Config Shape
 

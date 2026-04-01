@@ -125,9 +125,15 @@ export async function runHeuristicAudit(
 
 function parseAuditJson(rawOutput: string): AuditDecision {
   const parsed = JSON.parse(rawOutput) as Record<string, unknown>;
-  const decision = parsed.decision;
-  const summary = parsed.summary;
-  const nextPrompt = parsed.nextPrompt;
+  const payload =
+    typeof parsed.structured_output === "object" &&
+    parsed.structured_output !== null &&
+    !Array.isArray(parsed.structured_output)
+      ? (parsed.structured_output as Record<string, unknown>)
+      : parsed;
+  const decision = payload.decision;
+  const summary = payload.summary;
+  const nextPrompt = payload.nextPrompt;
 
   if ((decision !== "complete" && decision !== "continue") || typeof summary !== "string") {
     throw new Error("Auditor output JSON must include decision and summary.");
