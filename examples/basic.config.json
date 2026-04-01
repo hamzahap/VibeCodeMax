@@ -1,0 +1,36 @@
+{
+  "workspace": "./sandbox",
+  "task": {
+    "title": "Create a finished deliverable",
+    "objective": "Write examples/sandbox/deliverable.txt and keep iterating until it is final.",
+    "completionCriteria": [
+      "The file deliverable.txt exists.",
+      "The verification command exits successfully."
+    ]
+  },
+  "budgets": {
+    "mode": "bounded",
+    "maxAttempts": 4
+  },
+  "agents": {
+    "demo-primary": {
+      "command": "node ../fake-agent.mjs",
+      "estimatedTokensPerRun": 1500
+    },
+    "demo-auditor": {
+      "command": "node ../fake-auditor.mjs",
+      "estimatedTokensPerRun": 600
+    }
+  },
+  "run": {
+    "primaryAgent": "demo-primary",
+    "auditorAgent": "demo-auditor",
+    "requiredFiles": ["deliverable.txt"],
+    "verification": [
+      {
+        "name": "deliverable-check",
+        "command": "node -e \"const fs=require('fs'); const text=fs.readFileSync('deliverable.txt','utf8'); if(!text.includes('Final deliverable')) process.exit(1);\""
+      }
+    ]
+  }
+}
