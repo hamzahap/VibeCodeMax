@@ -27,6 +27,29 @@ This repo currently ships a strong CLI-first release. It is strongest when your 
 ```bash
 npm install
 npm run build
+node dist/src/cli.js init
+node dist/src/cli.js run vibecodemax.config.json
+node dist/src/cli.js inspect latest
+```
+
+To bootstrap another repository from this checkout:
+
+```bash
+cd /path/to/other-repo
+node /path/to/VibeCodeMax/dist/src/cli.js init . --agent codex
+node /path/to/VibeCodeMax/dist/src/cli.js run vibecodemax.config.json
+node /path/to/VibeCodeMax/dist/src/cli.js inspect latest
+```
+
+The generated bootstrap creates:
+
+- `vibecodemax.config.json`
+- `vibecodemax.scope.md`
+- a `.gitignore` entry for `.vibecodemax/`
+
+If you just want to test the loop end-to-end before wiring in a real repo:
+
+```bash
 node dist/src/cli.js run examples/basic.config.json
 node dist/src/cli.js inspect latest
 ```
@@ -55,6 +78,30 @@ The outer self-host run is the proof run. Do not trigger `npm run self-host:*` o
 7. If the answer is `continue`, it builds the next prompt from the audit feedback and repeats.
 8. You can inspect the final run timeline with `vibecodemax inspect`.
 
+## Bootstrapping Another Repo
+
+Use `init` from the target repository root:
+
+```bash
+vibecodemax init
+```
+
+Or point it at another workspace explicitly:
+
+```bash
+vibecodemax init ../another-repo --agent claude
+```
+
+What `init` does:
+
+- detects common repo files and package managers
+- generates `vibecodemax.config.json`
+- generates `vibecodemax.scope.md`
+- auto-fills verification commands for common setups such as npm, pnpm, yarn, bun, Cargo, Go, and pytest-style Python repos
+- appends `.vibecodemax/` to `.gitignore`
+
+Before the first real run, edit `vibecodemax.scope.md` so the task and definition of done are explicit.
+
 ## Inspecting Runs
 
 Use the CLI to inspect the latest completed run or a specific completed run directory:
@@ -80,45 +127,42 @@ The output summarizes:
 {
   "workspace": ".",
   "task": {
-    "title": "Finish the feature",
-    "objective": "Implement the full task, not a partial draft.",
-    "scopeFile": "docs/current-scope.md",
+    "title": "Complete work for my-repo",
+    "objective": "Complete the requested work for my-repo according to vibecodemax.scope.md. If the repository already satisfies the scope, avoid unnecessary churn and leave the workspace passing verification.",
+    "scopeFile": "vibecodemax.scope.md",
     "completionCriteria": [
-      "Everything in docs/current-scope.md is satisfied.",
-      "Tests pass."
+      "Everything in vibecodemax.scope.md is satisfied.",
+      "All configured verification commands pass."
     ],
-    "contextFiles": ["README.md", "src/index.ts"]
+    "contextFiles": ["README.md", "package.json", "tsconfig.json"]
   },
   "budgets": {
-    "mode": "bounded",
-    "maxAttempts": 8,
-    "maxRuntimeMinutes": 90,
-    "maxUsd": 15
+    "mode": "until_complete",
+    "maxRuntimeMinutes": 60
   },
   "agents": {
     "primary": {
       "type": "codex_exec",
-      "model": "your-model-name",
+      "model": "gpt-5.4",
       "dangerouslyBypassApprovalsAndSandbox": true
     },
     "auditor": {
-      "type": "claude_print",
-      "model": "your-auditor-model",
-      "permissionMode": "auto",
-      "outputFormat": "json"
+      "type": "codex_exec",
+      "model": "gpt-5.4-mini",
+      "dangerouslyBypassApprovalsAndSandbox": true
     }
   },
   "run": {
     "primaryAgent": "primary",
     "auditorAgent": "auditor",
-    "requiredFiles": ["README.md"],
+    "requiredFiles": ["vibecodemax.scope.md", "README.md"],
     "verification": [
       {
-        "name": "tests",
+        "name": "test",
         "command": "npm test"
       }
     ],
-    "maxNoChangeAttempts": 3
+    "maxNoChangeAttempts": 2
   }
 }
 ```
@@ -134,8 +178,9 @@ To change what "100% complete" means for a run:
 
 1. Edit the scope document referenced by `task.scopeFile`.
 2. Tighten `run.verification` or `run.requiredFiles` if the new scope needs stronger proof.
-3. Rerun the loop with `node dist/src/cli.js run <config>` or one of the included self-host scripts.
-4. Inspect the finished run with `node dist/src/cli.js inspect latest`.
+3. If you have not bootstrapped the repo yet, run `node dist/src/cli.js init`.
+4. Rerun the loop with `node dist/src/cli.js run <config>` or one of the included self-host scripts.
+5. Inspect the finished run with `node dist/src/cli.js inspect latest`.
 
 For this repository, the default scope file is [`docs/current-scope.md`](docs/current-scope.md).
 
