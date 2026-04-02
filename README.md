@@ -133,7 +133,15 @@ Public GitHub Releases are free, so this repo now ships a tag-driven release flo
 - The workflow runs `npm test`, builds the CLI, creates an `npm pack` tarball, generates `SHA256SUMS.txt`, and publishes both to a GitHub Release.
 - That gives you a downloadable packaged CLI artifact directly from GitHub without paying for npm publishing.
 
-Public npm packages and public GitHub Packages are also free, but actually publishing to those registries still requires account credentials or tokens. This repo does not auto-publish to a registry yet.
+Public npm packages and public GitHub Packages are also free, but actually publishing to those registries still requires account credentials or tokens.
+
+For npm, this repo now includes [`.github/workflows/publish-npm.yml`](.github/workflows/publish-npm.yml). Add an `NPM_TOKEN` repository secret, then run the workflow manually to publish the current package version to npm.
+
+You can also publish from a logged-in machine with:
+
+```bash
+npm run publish:npm
+```
 
 ## Config Shape
 
