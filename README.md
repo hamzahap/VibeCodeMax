@@ -125,6 +125,16 @@ The output summarizes:
 - workspace change summary
 - auditor decision for each attempt
 
+## Releases
+
+Public GitHub Releases are free, so this repo now ships a tag-driven release flow.
+
+- Pushing a tag like `v0.1.0` triggers [`.github/workflows/release.yml`](.github/workflows/release.yml).
+- The workflow runs `npm test`, builds the CLI, creates an `npm pack` tarball, generates `SHA256SUMS.txt`, and publishes both to a GitHub Release.
+- That gives you a downloadable packaged CLI artifact directly from GitHub without paying for npm publishing.
+
+Public npm packages and public GitHub Packages are also free, but actually publishing to those registries still requires account credentials or tokens. This repo does not auto-publish to a registry yet.
+
 ## Config Shape
 
 ```json
@@ -408,6 +418,7 @@ Or:
 npm install
 npm run build
 npm test
+npm run package:dry-run
 ```
 
 ## Roadmap

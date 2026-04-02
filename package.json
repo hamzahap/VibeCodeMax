@@ -3,11 +3,27 @@
   "version": "0.1.0",
   "description": "Autonomous retry and audit loop for coding agents.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hamzahap/VibeCodeMax.git"
+  },
+  "homepage": "https://github.com/hamzahap/VibeCodeMax",
+  "bugs": {
+    "url": "https://github.com/hamzahap/VibeCodeMax/issues"
+  },
+  "files": [
+    "dist/src/",
+    "README.md",
+    "LICENSE"
+  ],
   "bin": {
     "vibecodemax": "./dist/src/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
+    "package:dry-run": "npm pack --dry-run",
+    "package:tarball": "npm pack",
     "test": "npm run build && node --test dist/test/**/*.test.js",
     "start": "node dist/src/cli.js",
     "self-host:codex": "npm run build && node dist/src/cli.js run vibecodemax.self-host.codex.json",
@@ -21,6 +37,12 @@
     "cli"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@types/node": "^24.6.2",
     "typescript": "^5.9.3"
