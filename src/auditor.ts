@@ -3,6 +3,7 @@ import path from "node:path";
 import { runConfiguredAgent } from "./agents.js";
 import { buildAuditPrompt, type TemplateVariables } from "./prompts.js";
 import { ensureDirectory, writeJson } from "./process.js";
+import { summarizeTaskSnippets } from "./task-files.js";
 import type {
   AuditDecision,
   AuditPacket,
@@ -43,6 +44,7 @@ export async function buildAuditPacket(input: {
   config: NormalizedConfig;
   attempt: number;
   taskScope?: AuditPacket["taskScope"];
+  taskFiles?: AuditPacket["taskFiles"];
   previousFeedback?: string;
   primaryResult: AuditPacket["primaryResult"];
   verificationResults: VerificationResult[];
@@ -61,6 +63,7 @@ export async function buildAuditPacket(input: {
     attempt: input.attempt,
     task: input.config.task,
     taskScope: input.taskScope,
+    taskFiles: input.taskFiles,
     previousFeedback: input.previousFeedback,
     primaryResult: input.primaryResult,
     verificationResults: input.verificationResults,
@@ -86,6 +89,7 @@ export async function runHeuristicAudit(
   const verificationFailures = buildVerificationFailureSummary(packet.verificationResults);
   const noWorkspaceChanges =
     packet.workspaceSnapshot.isGitRepo && packet.workspaceSnapshot.changedFiles.length === 0;
+  const taskFileSummaries = summarizeTaskSnippets(packet.taskFiles ?? []);
   reasons.push(...verificationFailures);
 
   if (packet.primaryResult.exitCode !== 0) {
@@ -95,6 +99,25 @@ export async function runHeuristicAudit(
   const missingFiles = packet.requiredFiles.filter((file) => !file.exists);
   if (missingFiles.length > 0) {
     reasons.push(`Missing required files: ${missingFiles.map((file) => file.path).join(", ")}.`);
+  }
+
+  const unreadableTaskFiles = taskFileSummaries.filter((summary) => summary.unreadable);
+  if (unreadableTaskFiles.length > 0) {
+    reasons.push(
+      `Configured task tracking files could not be read: ${unreadableTaskFiles.map((summary) => summary.path).join(", ")}.`,
+    );
+  }
+
+  const unresolvedTaskFiles = taskFileSummaries.filter((summary) => summary.uncheckedCount > 0);
+  if (unresolvedTaskFiles.length > 0) {
+    reasons.push(
+      unresolvedTaskFiles
+        .map(
+          (summary) =>
+            `${summary.path} still has ${summary.uncheckedCount} unchecked checklist item(s).`,
+        )
+        .join(" "),
+    );
   }
 
   if (reasons.length === 0) {
@@ -114,6 +137,18 @@ export async function runHeuristicAudit(
       ...verificationFailures,
       missingFiles.length > 0
         ? `Create or update the required files: ${missingFiles.map((file) => file.path).join(", ")}.`
+        : "",
+      unresolvedTaskFiles.length > 0
+        ? [
+            "Finish or intentionally rewrite the remaining task-list items in:",
+            unresolvedTaskFiles
+              .map((summary) => {
+                const preview = summary.uncheckedItems.slice(0, 3).join("; ");
+                return preview ? `${summary.path} (${preview})` : `${summary.path}`;
+              })
+              .join(", "),
+            ".",
+          ].join(" ")
         : "",
       noWorkspaceChanges ? "If the task is not already satisfied, make concrete workspace changes." : "",
     ]

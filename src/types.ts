@@ -9,6 +9,7 @@ export interface TaskConfig {
   completionCriteria?: string[];
   contextFiles?: string[];
   scopeFile?: string;
+  taskFiles?: string[];
 }
 
 export interface NormalizedTaskConfig {
@@ -17,6 +18,7 @@ export interface NormalizedTaskConfig {
   completionCriteria: string[];
   contextFiles: string[];
   scopeFile?: string;
+  taskFiles: string[];
 }
 
 export interface BudgetConfig {
@@ -196,6 +198,7 @@ export interface AuditPacket {
   attempt: number;
   task: TaskConfig;
   taskScope?: ContextSnippet;
+  taskFiles?: ContextSnippet[];
   previousFeedback?: string;
   primaryResult: CommandResult;
   verificationResults: VerificationResult[];

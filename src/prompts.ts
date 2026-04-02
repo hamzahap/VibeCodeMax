@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { renderTaskChecklistSummary, summarizeTaskSnippets } from "./task-files.js";
 import type { ContextSnippet, NormalizedConfig, VerificationResult } from "./types.js";
 
 const CONTEXT_SNIPPET_LIMIT = 6_000;
@@ -72,6 +73,16 @@ export async function loadContextSnippets(config: NormalizedConfig): Promise<Con
   return snippets;
 }
 
+export async function loadTaskSnippets(config: NormalizedConfig): Promise<ContextSnippet[]> {
+  const snippets: ContextSnippet[] = [];
+
+  for (const relativeFile of config.task.taskFiles) {
+    snippets.push(await readSnippetFile(config.workspace, relativeFile));
+  }
+
+  return snippets;
+}
+
 function renderCompletionCriteria(criteria: string[]): string {
   if (criteria.length === 0) {
     return "- No explicit completion criteria were configured.";
@@ -116,12 +127,32 @@ function renderScopeSnippet(snippet?: ContextSnippet): string {
   return `## ${snippet.path}\n\`\`\`text\n${snippet.content.trimEnd()}\n\`\`\`${snippet.truncated ? "\n[snippet truncated]" : ""}`;
 }
 
+function renderTaskSnippets(snippets: ContextSnippet[]): string {
+  if (snippets.length === 0) {
+    return "No explicit task tracking files were configured.";
+  }
+
+  const summaries = summarizeTaskSnippets(snippets);
+
+  return snippets
+    .map((snippet, index) => {
+      const summary = summaries[index]!;
+      return [
+        `## ${snippet.path}`,
+        renderTaskChecklistSummary(summary),
+        `\`\`\`text\n${snippet.content.trimEnd()}\n\`\`\`${snippet.truncated ? "\n[snippet truncated]" : ""}`,
+      ].join("\n");
+    })
+    .join("\n\n");
+}
+
 export function buildPrimaryPrompt(input: {
   config: NormalizedConfig;
   attempt: number;
   previousFeedback?: string;
   previousVerificationResults?: VerificationResult[];
   scopeSnippet?: ContextSnippet;
+  taskSnippets: ContextSnippet[];
   contextSnippets: ContextSnippet[];
 }): string {
   const {
@@ -130,6 +161,7 @@ export function buildPrimaryPrompt(input: {
     previousFeedback,
     previousVerificationResults,
     scopeSnippet,
+    taskSnippets,
     contextSnippets,
   } = input;
 
@@ -147,6 +179,9 @@ export function buildPrimaryPrompt(input: {
     "## Scope / Definition of Done",
     renderScopeSnippet(scopeSnippet),
     "",
+    "## Task Tracking Files",
+    renderTaskSnippets(taskSnippets),
+    "",
     "## Previous Auditor Feedback",
     previousFeedback?.trim() || "- No prior feedback. Deliver the complete result.",
     "",
@@ -160,6 +195,7 @@ export function buildPrimaryPrompt(input: {
     "- Make the task actually complete, not partially complete.",
     "- Modify files directly in the workspace.",
     "- Leave the workspace in a verifiable state.",
+    "- Treat unchecked checklist items in configured task tracking files as incomplete work unless you intentionally update those files to match the true finished scope.",
     "- Do not launch nested VibeCodeMax/self-host loops from inside this run unless the task explicitly requires nested-loop testing.",
     "- If the task needs proof of a completed run, use this run's artifacts instead of spawning another orchestrator instance.",
     "- Prefer decisive changes over incremental stalling.",
@@ -183,6 +219,7 @@ export function buildAuditPrompt(input: {
     '{"decision":"complete|continue","summary":"short rationale","nextPrompt":"specific next instruction when continuing"}',
     "",
     "Read the audit packet file before deciding. When present, taskScope in the packet is the repo-defined definition of done.",
+    "When taskFiles are present in the packet, treat unresolved unchecked checklist items as evidence that the task is not complete unless the file was intentionally updated to reflect a narrower finished scope.",
     "",
     "If you choose complete, set nextPrompt to an empty string.",
     "",

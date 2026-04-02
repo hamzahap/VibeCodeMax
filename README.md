@@ -47,6 +47,8 @@ The generated bootstrap creates:
 - `vibecodemax.scope.md`
 - a `.gitignore` entry for `.vibecodemax/`
 
+It also auto-detects conventional task trackers such as `TASKS.md`, `TODO.md`, `PLAN.md`, and `CHECKLIST.md` including common `.claude/` and `.codex/` locations, then wires them into `task.taskFiles`.
+
 If you just want to test the loop end-to-end before wiring in a real repo:
 
 ```bash
@@ -97,10 +99,12 @@ What `init` does:
 - detects common repo files and package managers
 - generates `vibecodemax.config.json`
 - generates `vibecodemax.scope.md`
+- detects conventional task-list files such as `TASKS.md`, `TODO.md`, `PLAN.md`, and `CHECKLIST.md`
 - auto-fills verification commands for common setups such as npm, pnpm, yarn, bun, Cargo, Go, and pytest-style Python repos
 - appends `.vibecodemax/` to `.gitignore`
 
 Before the first real run, edit `vibecodemax.scope.md` so the task and definition of done are explicit.
+If the repo already has a real task list, leave it in place and let VibeCodeMax read it through `task.taskFiles`.
 
 ## Inspecting Runs
 
@@ -130,9 +134,11 @@ The output summarizes:
     "title": "Complete work for my-repo",
     "objective": "Complete the requested work for my-repo according to vibecodemax.scope.md. If the repository already satisfies the scope, avoid unnecessary churn and leave the workspace passing verification.",
     "scopeFile": "vibecodemax.scope.md",
+    "taskFiles": ["TASKS.md"],
     "completionCriteria": [
       "Everything in vibecodemax.scope.md is satisfied.",
-      "All configured verification commands pass."
+      "All configured verification commands pass.",
+      "Configured task tracking files are either fully completed or intentionally updated to reflect the true finished scope."
     ],
     "contextFiles": ["README.md", "package.json", "tsconfig.json"]
   },
@@ -183,6 +189,15 @@ To change what "100% complete" means for a run:
 5. Inspect the finished run with `node dist/src/cli.js inspect latest`.
 
 For this repository, the default scope file is [`docs/current-scope.md`](docs/current-scope.md).
+
+## Task Tracking Files
+
+Use `task.taskFiles` for repo-local checklists such as `TASKS.md`.
+
+- These files are rendered in a dedicated prompt section for the primary agent.
+- They are included in the audit packet for the external auditor.
+- The built-in heuristic auditor treats unchecked markdown checkboxes as incomplete work.
+- If a task file is stale, the agent should either finish the remaining items or intentionally update the file so it matches the true completed scope.
 
 ## Integrating Your Agent
 

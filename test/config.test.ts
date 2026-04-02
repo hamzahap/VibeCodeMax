@@ -81,6 +81,40 @@ test("loadConfig rejects blank task.scopeFile", async () => {
   await rm(workspace, { recursive: true, force: true });
 });
 
+test("loadConfig rejects blank task.taskFiles entries", async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "vcm-config-"));
+  const configPath = path.join(workspace, "vibecodemax.config.json");
+
+  await writeFile(
+    configPath,
+    JSON.stringify(
+      {
+        workspace,
+        task: {
+          title: "Invalid task files",
+          objective: "Validate task.taskFiles.",
+          taskFiles: ["TASKS.md", "   "],
+        },
+        agents: {
+          primary: {
+            command: "echo hi",
+          },
+        },
+        run: {
+          primaryAgent: "primary",
+        },
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
+  await assert.rejects(loadConfig(configPath), /task.taskFiles must be an array of non-empty strings/);
+
+  await rm(workspace, { recursive: true, force: true });
+});
+
 test("loadConfig rejects unsupported codex_exec approvalPolicy and search fields", async () => {
   const workspace = await mkdtemp(path.join(os.tmpdir(), "vcm-config-"));
   const configPath = path.join(workspace, "vibecodemax.config.json");

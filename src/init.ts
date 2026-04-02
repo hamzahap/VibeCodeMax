@@ -28,6 +28,7 @@ export interface InitProjectResult {
   agentPreset: InitAgentPreset;
   packageManager?: PackageManager;
   contextFiles: string[];
+  taskFiles: string[];
   requiredFiles: string[];
   verification: VerificationCommandConfig[];
   gitignoreUpdated: boolean;
@@ -210,11 +211,38 @@ async function detectContextFiles(workspace: string): Promise<string[]> {
   return uniqueStrings(discovered);
 }
 
+async function detectTaskFiles(workspace: string): Promise<string[]> {
+  const candidates = [
+    "TASKS.md",
+    "TASKLIST.md",
+    "TODO.md",
+    "PLAN.md",
+    "CHECKLIST.md",
+    "docs/TASKS.md",
+    "docs/TODO.md",
+    "docs/PLAN.md",
+    ".claude/TASKS.md",
+    ".claude/TODO.md",
+    ".codex/TASKS.md",
+    ".codex/TODO.md",
+  ];
+
+  const discovered: string[] = [];
+  for (const candidate of candidates) {
+    if (await pathExists(path.join(workspace, candidate))) {
+      discovered.push(candidate);
+    }
+  }
+
+  return uniqueStrings(discovered);
+}
+
 function buildScopeTemplate(input: {
   repoName: string;
   scopeFile: string;
   verification: VerificationCommandConfig[];
   contextFiles: string[];
+  taskFiles: string[];
 }): string {
   const verificationLines =
     input.verification.length === 0
@@ -228,6 +256,11 @@ function buildScopeTemplate(input: {
     input.contextFiles.length === 0
       ? ["- No obvious context files were auto-detected."]
       : input.contextFiles.map((file) => `- ${file}`);
+
+  const taskFileLines =
+    input.taskFiles.length === 0
+      ? ["- No conventional task-list files were auto-detected."]
+      : input.taskFiles.map((file) => `- ${file}`);
 
   return [
     "# VibeCodeMax Scope",
@@ -250,8 +283,12 @@ function buildScopeTemplate(input: {
     "## Useful Context",
     ...contextLines,
     "",
+    "## Auto-Detected Task Lists",
+    ...taskFileLines,
+    "",
     "## Notes",
     `- VibeCodeMax reads this file through task.scopeFile in ${CONFIG_FILENAME}.`,
+    `- VibeCodeMax reads task/task-list files through task.taskFiles in ${CONFIG_FILENAME}.`,
     "- Tighten this file whenever you raise the bar for what counts as complete.",
   ].join("\n");
 }
@@ -360,6 +397,7 @@ export async function initProject(options: InitProjectOptions = {}): Promise<Ini
   const packageManager = await detectPackageManager(workspace, packageJson);
   const verification = await detectVerificationCommands(workspace, packageManager, packageJson);
   const contextFiles = await detectContextFiles(workspace);
+  const taskFiles = await detectTaskFiles(workspace);
   const readme = await detectReadme(workspace);
   const repoName = packageJson?.name?.trim() || path.basename(workspace);
   const configPath = path.join(workspace, CONFIG_FILENAME);
@@ -378,8 +416,12 @@ export async function initProject(options: InitProjectOptions = {}): Promise<Ini
         verification.length > 0
           ? "All configured verification commands pass."
           : "Add verification commands before you rely on this run for completion.",
+        taskFiles.length > 0
+          ? "Configured task tracking files are either fully completed or intentionally updated to reflect the true finished scope."
+          : "If the repo uses a task list, add it under task.taskFiles so unchecked items count against completion.",
       ],
       contextFiles,
+      taskFiles,
     },
     budgets: {
       mode: "until_complete",
@@ -400,6 +442,7 @@ export async function initProject(options: InitProjectOptions = {}): Promise<Ini
     scopeFile,
     verification,
     contextFiles,
+    taskFiles,
   });
 
   const existingConfig = await pathExists(configPath);
@@ -422,10 +465,10 @@ export async function initProject(options: InitProjectOptions = {}): Promise<Ini
     agentPreset,
     packageManager,
     contextFiles,
+    taskFiles,
     requiredFiles,
     verification,
     gitignoreUpdated,
     overwritten: existingConfig || existingScope,
   };
 }
-

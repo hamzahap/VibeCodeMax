@@ -28,6 +28,7 @@ test("initProject scaffolds a codex config for a Node repo", async () => {
   );
   await writeFile(path.join(workspace, "README.md"), "# Example App\n", "utf8");
   await writeFile(path.join(workspace, "tsconfig.json"), "{ }\n", "utf8");
+  await writeFile(path.join(workspace, "TASKS.md"), "# Tasks\n\n- [ ] Ship feature\n", "utf8");
 
   const result = await initProject({ targetDir: workspace });
   const config = JSON.parse(
@@ -39,6 +40,7 @@ test("initProject scaffolds a codex config for a Node repo", async () => {
   assert.equal(result.agentPreset, "codex");
   assert.equal(result.packageManager, "pnpm");
   assert.equal(config.task.scopeFile, "vibecodemax.scope.md");
+  assert.deepEqual(config.task.taskFiles, ["TASKS.md"]);
   assert.equal(config.agents.primary?.type, "codex_exec");
   assert.deepEqual(
     config.run.verification?.map((command) => command.command),
@@ -47,8 +49,11 @@ test("initProject scaffolds a codex config for a Node repo", async () => {
   assert.deepEqual(config.run.requiredFiles, ["vibecodemax.scope.md", "README.md"]);
   assert.ok(config.task.contextFiles?.includes("README.md"));
   assert.ok(config.task.contextFiles?.includes("package.json"));
+  assert.deepEqual(result.taskFiles, ["TASKS.md"]);
   assert.match(scope, /This file defines what "complete" means for example-app\./);
   assert.match(scope, /pnpm test/);
+  assert.match(scope, /Auto-Detected Task Lists/);
+  assert.match(scope, /TASKS\.md/);
   assert.match(gitignore, /\.vibecodemax\//);
 
   await rm(workspace, { recursive: true, force: true });

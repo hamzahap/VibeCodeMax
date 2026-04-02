@@ -8,6 +8,7 @@ import {
   buildPrimaryPrompt,
   loadContextSnippets,
   loadScopeSnippet,
+  loadTaskSnippets,
   renderTemplate,
   type TemplateVariables,
 } from "./prompts.js";
@@ -186,6 +187,7 @@ export async function runFromConfig(configPath: string, logger: Logger): Promise
   await writeJson(path.join(runDirectory, "normalized-config.json"), config);
 
   const scopeSnippet = await loadScopeSnippet(config);
+  const taskSnippets = await loadTaskSnippets(config);
   const contextSnippets = await loadContextSnippets(config);
 
   const budgetState: BudgetState = {
@@ -246,6 +248,7 @@ export async function runFromConfig(configPath: string, logger: Logger): Promise
       previousFeedback,
       previousVerificationResults,
       scopeSnippet,
+      taskSnippets,
       contextSnippets,
     });
 
@@ -310,6 +313,7 @@ export async function runFromConfig(configPath: string, logger: Logger): Promise
       verificationResults,
       workspaceSnapshot,
       taskScope: scopeSnippet,
+      taskFiles: taskSnippets,
       attemptsUsed: budgetState.attempts,
       elapsedMinutes: (Date.now() - startedAtMs) / 60_000,
       estimatedUsd: budgetState.totalEstimatedUsd,

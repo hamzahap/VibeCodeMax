@@ -30,6 +30,7 @@ function formatInitSummary(input: Awaited<ReturnType<typeof initProject>>): stri
     `Package manager: ${input.packageManager ?? "not detected"}`,
     `Verification: ${input.verification.length > 0 ? input.verification.map((command) => command.command).join(", ") : "none auto-detected"}`,
     `Context files: ${input.contextFiles.length > 0 ? input.contextFiles.join(", ") : "none auto-detected"}`,
+    `Task files: ${input.taskFiles.length > 0 ? input.taskFiles.join(", ") : "none auto-detected"}`,
     `Required files: ${input.requiredFiles.join(", ")}`,
     `Gitignore updated: ${input.gitignoreUpdated ? "yes" : "no"}`,
     "",
